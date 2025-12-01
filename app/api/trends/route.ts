@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, TrendCategory, Trend } from '@/lib/supabase';
+import { supabaseAdmin, TrendCategory, Trend } from '@/lib/supabase';
 import { TrendResponse, TrendItem, CATEGORY_LABELS } from '@/types/trend';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const results: Record<string, TrendResponse> = {};
 
     for (const cat of categories) {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('trends')
         .select('*')
         .eq('category', cat)
