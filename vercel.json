@@ -1,0 +1,24 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/fetch-keywords",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/fetch-social",
+      "schedule": "10 * * * *"
+    },
+    {
+      "path": "/api/cron/fetch-youtube",
+      "schedule": "20 * * * *"
+    },
+    {
+      "path": "/api/cron/fetch-shopping",
+      "schedule": "30 * * * *"
+    },
+    {
+      "path": "/api/cron/fetch-rising",
+      "schedule": "40 * * * *"
+    }
+  ]
+}
