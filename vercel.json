@@ -2,23 +2,23 @@
   "crons": [
     {
       "path": "/api/cron/fetch-keywords",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/fetch-social",
-      "schedule": "10 * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/fetch-youtube",
-      "schedule": "20 * * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/fetch-shopping",
-      "schedule": "30 * * * *"
+      "schedule": "0 15 * * *"
     },
     {
       "path": "/api/cron/fetch-rising",
-      "schedule": "40 * * * *"
+      "schedule": "0 18 * * *"
     }
   ]
 }
