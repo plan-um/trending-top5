@@ -11,11 +11,8 @@ const sql = `
 -- UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Drop existing table if needed (comment out if you want to keep data)
--- DROP TABLE IF EXISTS trends;
-
--- trends 테이블 생성
-CREATE TABLE IF NOT EXISTS trends (
+-- trends 테이블 생성 (올바른 스키마!)
+CREATE TABLE IF NOT EXISTS public.trends (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   category TEXT NOT NULL CHECK (category IN ('keyword', 'social', 'content', 'shopping', 'rising', 'overall')),
   rank INTEGER NOT NULL CHECK (rank >= 1 AND rank <= 20),
@@ -28,13 +25,13 @@ CREATE TABLE IF NOT EXISTS trends (
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(category, rank)  -- UPSERT를 위한 고유 제약조건
+  UNIQUE(category, rank)  -- UPSERT를 위한 고유 제약조건!
 );
 
 -- 인덱스 생성
-CREATE INDEX IF NOT EXISTS idx_trends_category ON trends(category);
-CREATE INDEX IF NOT EXISTS idx_trends_updated ON trends(updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_trends_category_rank ON trends(category, rank);
+CREATE INDEX IF NOT EXISTS idx_trends_category ON public.trends(category);
+CREATE INDEX IF NOT EXISTS idx_trends_updated ON public.trends(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trends_category_rank ON public.trends(category, rank);
 
 -- updated_at 자동 업데이트 함수
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -46,31 +43,31 @@ END;
 $$ language 'plpgsql';
 
 -- 트리거 (존재하면 삭제 후 재생성)
-DROP TRIGGER IF EXISTS update_trends_updated_at ON trends;
+DROP TRIGGER IF EXISTS update_trends_updated_at ON public.trends;
 CREATE TRIGGER update_trends_updated_at
-    BEFORE UPDATE ON trends
+    BEFORE UPDATE ON public.trends
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- RLS 활성화
-ALTER TABLE trends ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trends ENABLE ROW LEVEL SECURITY;
 
 -- 기존 정책 삭제 (에러 방지)
-DROP POLICY IF EXISTS "Allow public read access" ON trends;
-DROP POLICY IF EXISTS "Allow service role write access" ON trends;
+DROP POLICY IF EXISTS "Allow public read access" ON public.trends;
+DROP POLICY IF EXISTS "Allow service role write access" ON public.trends;
 
 -- 새 정책 생성
-CREATE POLICY "Allow public read access" ON trends
+CREATE POLICY "Allow public read access" ON public.trends
     FOR SELECT
     USING (true);
 
-CREATE POLICY "Allow service role write access" ON trends
+CREATE POLICY "Allow service role write access" ON public.trends
     FOR ALL
     USING (true)
     WITH CHECK (true);
 `;
 
-async function setup() {
+async function createTable() {
   const client = new Client({
     connectionString: DATABASE_URL,
   });
@@ -80,9 +77,9 @@ async function setup() {
     await client.connect();
     console.log('Connected!');
 
-    console.log('Creating tables...');
+    console.log('Creating table with correct schema...');
     await client.query(sql);
-    console.log('Tables created successfully!');
+    console.log('Table created successfully!');
 
     // 테이블 확인
     const result = await client.query(`
@@ -90,7 +87,23 @@ async function setup() {
       FROM information_schema.tables
       WHERE table_schema = 'public' AND table_name = 'trends'
     `);
-    console.log('Verified table exists:', result.rows.length > 0);
+    console.log('Table exists:', result.rows.length > 0);
+
+    // 제약조건 확인
+    const constraints = await client.query(`
+      SELECT conname, contype
+      FROM pg_constraint
+      WHERE conrelid = 'public.trends'::regclass;
+    `);
+    console.log('Constraints:', constraints.rows);
+
+    // 인덱스 확인
+    const indexes = await client.query(`
+      SELECT indexname
+      FROM pg_indexes
+      WHERE tablename = 'trends';
+    `);
+    console.log('Indexes:', indexes.rows.map(r => r.indexname));
 
   } catch (error) {
     console.error('Error:', error.message);
@@ -100,4 +113,4 @@ async function setup() {
   }
 }
 
-setup();
+createTable();

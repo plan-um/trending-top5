@@ -98,29 +98,18 @@ export async function getAllTrends(): Promise<Record<TrendCategory, TrendItem[]>
   return results as Record<TrendCategory, TrendItem[]>;
 }
 
-// 트렌드 저장 (서버 전용)
+// 트렌드 저장 (서버 전용) - UPSERT 사용
 export async function saveTrends(
   category: TrendCategory,
   trends: Omit<Trend, 'id' | 'created_at' | 'updated_at'>[]
 ): Promise<boolean> {
-  // 기존 데이터 삭제
-  const { error: deleteError } = await supabaseAdmin
+  // UPSERT: 테이블 유지하면서 데이터만 업데이트
+  const { error } = await supabaseAdmin
     .from('trends')
-    .delete()
-    .eq('category', category);
+    .upsert(trends, { onConflict: 'category,rank' });
 
-  if (deleteError) {
-    console.error('Error deleting old trends:', deleteError);
-    return false;
-  }
-
-  // 새 데이터 삽입
-  const { error: insertError } = await supabaseAdmin
-    .from('trends')
-    .insert(trends);
-
-  if (insertError) {
-    console.error('Error inserting trends:', insertError);
+  if (error) {
+    console.error('Error upserting trends:', error);
     return false;
   }
 

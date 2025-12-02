@@ -43,8 +43,18 @@ export async function GET(request: NextRequest) {
                 })
             );
 
-            await supabaseAdmin.from('trends').delete().eq('category', 'keyword');
-            await supabaseAdmin.from('trends').insert(trendsWithSummary);
+            // UPSERT: 테이블 유지하면서 데이터만 업데이트
+            const { error: upsertError } = await supabaseAdmin
+                .from('trends')
+                .upsert(trendsWithSummary, {
+                    onConflict: 'category,rank',
+                    ignoreDuplicates: false
+                });
+
+            if (upsertError) {
+                console.error('Error upserting keyword trends:', upsertError);
+                throw upsertError;
+            }
             results = trendsWithSummary;
 
         } else if (type === 'social') {
@@ -69,13 +79,17 @@ export async function GET(request: NextRequest) {
                 })
             );
 
-            const { error: deleteError } = await supabaseAdmin.from('trends').delete().eq('category', 'social');
-            if (deleteError) console.error('Error deleting social trends:', deleteError);
+            // UPSERT: 테이블 유지하면서 데이터만 업데이트
+            const { error: upsertError } = await supabaseAdmin
+                .from('trends')
+                .upsert(trendsWithSummary, {
+                    onConflict: 'category,rank',
+                    ignoreDuplicates: false
+                });
 
-            const { error: insertError } = await supabaseAdmin.from('trends').insert(trendsWithSummary);
-            if (insertError) {
-                console.error('Error saving social trends:', insertError);
-                throw insertError;
+            if (upsertError) {
+                console.error('Error upserting social trends:', upsertError);
+                throw upsertError;
             }
             results = trendsWithSummary;
 
@@ -107,8 +121,18 @@ export async function GET(request: NextRequest) {
                 })
             );
 
-            await supabaseAdmin.from('trends').delete().eq('category', 'content');
-            await supabaseAdmin.from('trends').insert(trendsWithSummary);
+            // UPSERT: 테이블 유지하면서 데이터만 업데이트
+            const { error: upsertError } = await supabaseAdmin
+                .from('trends')
+                .upsert(trendsWithSummary, {
+                    onConflict: 'category,rank',
+                    ignoreDuplicates: false
+                });
+
+            if (upsertError) {
+                console.error('Error upserting content trends:', upsertError);
+                throw upsertError;
+            }
             results = trendsWithSummary;
 
         } else if (type === 'shopping') {
@@ -129,8 +153,18 @@ export async function GET(request: NextRequest) {
                 },
             }));
 
-            await supabaseAdmin.from('trends').delete().eq('category', 'shopping');
-            await supabaseAdmin.from('trends').insert(trendsToSave);
+            // UPSERT: 테이블 유지하면서 데이터만 업데이트
+            const { error: upsertError } = await supabaseAdmin
+                .from('trends')
+                .upsert(trendsToSave, {
+                    onConflict: 'category,rank',
+                    ignoreDuplicates: false
+                });
+
+            if (upsertError) {
+                console.error('Error upserting shopping trends:', upsertError);
+                throw upsertError;
+            }
             results = trendsToSave;
 
         } else if (type === 'rising') {
@@ -152,8 +186,18 @@ export async function GET(request: NextRequest) {
                 },
             }));
 
-            await supabaseAdmin.from('trends').delete().eq('category', 'rising');
-            await supabaseAdmin.from('trends').insert(trendsToSave);
+            // UPSERT: 테이블 유지하면서 데이터만 업데이트
+            const { error: upsertError } = await supabaseAdmin
+                .from('trends')
+                .upsert(trendsToSave, {
+                    onConflict: 'category,rank',
+                    ignoreDuplicates: false
+                });
+
+            if (upsertError) {
+                console.error('Error upserting rising trends:', upsertError);
+                throw upsertError;
+            }
             results = trendsToSave;
 
         } else {

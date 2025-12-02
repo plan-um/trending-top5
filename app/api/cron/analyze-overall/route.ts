@@ -65,11 +65,10 @@ export async function GET(request: NextRequest) {
             metadata: item.metadata || {},
         }));
 
-        // 기존 overall 데이터 삭제
-        await supabaseAdmin.from('trends').delete().eq('category', 'overall');
-
-        // 새 데이터 저장
-        const { error } = await supabaseAdmin.from('trends').insert(trendsToSave);
+        // UPSERT: 테이블 유지하면서 데이터만 업데이트
+        const { error } = await supabaseAdmin
+            .from('trends')
+            .upsert(trendsToSave, { onConflict: 'category,rank' });
 
         if (error) {
             throw error;

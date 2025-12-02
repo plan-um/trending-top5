@@ -1,5 +1,6 @@
 import Parser from 'rss-parser';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as cheerio from 'cheerio';
 
 export interface ShoppingItem {
   rank: number;
@@ -15,7 +16,90 @@ const parser = new Parser();
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// 쇼핑 관련 뉴스/트렌드 RSS - 구체적인 상품명이 나오는 검색어로 변경
+// 네이버 쇼핑 베스트 직접 스크래핑
+async function scrapeNaverShoppingBest(): Promise<ShoppingItem[]> {
+  try {
+    // 네이버 쇼핑 트렌딩 API 사용
+    const response = await fetch('https://search.shopping.naver.com/best100v2/main/home', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+        'Referer': 'https://search.shopping.naver.com/',
+      },
+    });
+
+    if (!response.ok) {
+      console.log('Naver Shopping API failed, trying HTML scrape...');
+      return await scrapeNaverShoppingHTML();
+    }
+
+    const data = await response.json();
+    const products = data?.productList || data?.data?.productList || [];
+
+    return products.slice(0, 10).map((item: any, index: number) => ({
+      rank: index + 1,
+      title: item.productName || item.name || item.title,
+      link: item.productUrl || item.url || `https://search.shopping.naver.com/product/${item.productId}`,
+      price: item.price ? `${Number(item.price).toLocaleString()}원` : undefined,
+      thumbnail: item.imageUrl || item.image,
+      sourceName: item.mallName || '네이버쇼핑',
+    }));
+  } catch (error) {
+    console.error('Naver Shopping API error:', error);
+    return await scrapeNaverShoppingHTML();
+  }
+}
+
+// HTML 스크래핑 fallback
+async function scrapeNaverShoppingHTML(): Promise<ShoppingItem[]> {
+  try {
+    const response = await fetch('https://search.shopping.naver.com/best', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+      },
+    });
+
+    if (!response.ok) return [];
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const items: ShoppingItem[] = [];
+
+    // 베스트 상품 카드 파싱
+    $('[class*="product_item"], [class*="basicList_item"]').each((index, element) => {
+      if (items.length >= 10) return false;
+
+      const $el = $(element);
+      const title = $el.find('[class*="product_title"], [class*="basicList_title"]').text().trim() ||
+                    $el.find('a').first().attr('title') || '';
+      const link = $el.find('a').first().attr('href') || '';
+      const price = $el.find('[class*="price_num"], [class*="price"]').text().trim();
+      const thumbnail = $el.find('img').first().attr('src') ||
+                       $el.find('img').first().attr('data-src') || '';
+      const store = $el.find('[class*="product_mall"], [class*="mall"]').text().trim();
+
+      if (title && link) {
+        items.push({
+          rank: items.length + 1,
+          title: title.slice(0, 60),
+          link: link.startsWith('http') ? link : `https://search.shopping.naver.com${link}`,
+          price: price || undefined,
+          thumbnail: thumbnail || undefined,
+          sourceName: store || '네이버쇼핑',
+        });
+      }
+    });
+
+    return items;
+  } catch (error) {
+    console.error('Naver Shopping HTML scrape error:', error);
+    return [];
+  }
+}
+
+// 쇼핑 관련 뉴스/트렌드 RSS - fallback용
 const SHOPPING_SOURCES = [
   {
     url: 'https://news.google.com/rss/search?q=%ED%92%88%EC%A0%88%EB%8C%80%EB%9E%80+OR+%EC%99%84%ED%8C%90+OR+%EB%A7%A4%EC%A7%84+OR+%ED%95%AB%ED%95%9C&hl=ko&gl=KR&ceid=KR:ko',
@@ -37,7 +121,17 @@ const SHOPPING_SOURCES = [
 
 export async function fetchShoppingTrends(limit: number = 10): Promise<ShoppingItem[]> {
   try {
-    // 1. 여러 소스에서 쇼핑 관련 뉴스 수집
+    // 1. 네이버 쇼핑 베스트 직접 스크래핑 시도 (실제 상품 링크!)
+    console.log('Trying Naver Shopping direct scrape...');
+    const naverItems = await scrapeNaverShoppingBest();
+
+    if (naverItems.length >= 5) {
+      console.log(`Got ${naverItems.length} items from Naver Shopping`);
+      return naverItems.slice(0, limit);
+    }
+
+    // 2. Fallback: 뉴스 RSS에서 수집
+    console.log('Falling back to news RSS...');
     const allItems = await fetchFromSources();
 
     if (allItems.length === 0) {
@@ -45,14 +139,14 @@ export async function fetchShoppingTrends(limit: number = 10): Promise<ShoppingI
       return getMockShoppingTrends();
     }
 
-    // 2. Gemini로 인기 상품/트렌드 추출
+    // 3. Gemini로 인기 상품/트렌드 추출
     const shoppingTrends = await extractShoppingTrendsWithGemini(allItems);
 
     if (shoppingTrends.length > 0) {
       return shoppingTrends.slice(0, limit);
     }
 
-    // 3. Gemini 실패시 기본 추출
+    // 4. Gemini 실패시 기본 추출
     return extractBestItems(allItems, limit);
   } catch (error) {
     console.error('Error fetching shopping trends:', error);

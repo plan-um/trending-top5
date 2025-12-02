@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
                 },
             }))
         );
-        await supabaseAdmin.from('trends').delete().eq('category', 'keyword');
-        await supabaseAdmin.from('trends').insert(keywordTrends);
+        // UPSERT: 테이블 유지하면서 데이터만 업데이트
+        await supabaseAdmin.from('trends').upsert(keywordTrends, { onConflict: 'category,rank' });
         results.keyword = keywordTrends.length;
 
         // 2. Social trends
@@ -59,8 +59,7 @@ export async function GET(request: NextRequest) {
                 metadata: { description: item.description },
             }))
         );
-        await supabaseAdmin.from('trends').delete().eq('category', 'social');
-        await supabaseAdmin.from('trends').insert(socialTrends);
+        await supabaseAdmin.from('trends').upsert(socialTrends, { onConflict: 'category,rank' });
         results.social = socialTrends.length;
 
         // 3. Content trends (YouTube)
@@ -83,8 +82,7 @@ export async function GET(request: NextRequest) {
                 },
             }))
         );
-        await supabaseAdmin.from('trends').delete().eq('category', 'content');
-        await supabaseAdmin.from('trends').insert(contentTrends);
+        await supabaseAdmin.from('trends').upsert(contentTrends, { onConflict: 'category,rank' });
         results.content = contentTrends.length;
 
         // 4. Shopping trends
@@ -100,8 +98,7 @@ export async function GET(request: NextRequest) {
             change_rate: null,
             metadata: { price: item.price, thumbnail: item.thumbnail },
         }));
-        await supabaseAdmin.from('trends').delete().eq('category', 'shopping');
-        await supabaseAdmin.from('trends').insert(shoppingTrends);
+        await supabaseAdmin.from('trends').upsert(shoppingTrends, { onConflict: 'category,rank' });
         results.shopping = shoppingTrends.length;
 
         // 5. Rising trends
@@ -121,8 +118,7 @@ export async function GET(request: NextRequest) {
                 isNewToNews: trend.isNewToNews,
             },
         }));
-        await supabaseAdmin.from('trends').delete().eq('category', 'rising');
-        await supabaseAdmin.from('trends').insert(risingTrends);
+        await supabaseAdmin.from('trends').upsert(risingTrends, { onConflict: 'category,rank' });
         results.rising = risingTrends.length;
 
         return NextResponse.json({

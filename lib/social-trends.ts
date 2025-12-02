@@ -1,5 +1,6 @@
 import Parser from 'rss-parser';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import * as cheerio from 'cheerio';
 
 const parser = new Parser({
     customFields: {
@@ -13,12 +14,119 @@ export interface SocialItem {
     link: string;
     description?: string;
     sourceName: string;
+    thumbnail?: string;
 }
 
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// 다양한 소스에서 바이럴/소셜 트렌드 수집
+// 더쿠 실시간 HOT 크롤링 - 실제 커뮤니티 포스트 링크!
+async function scrapeTheqooHot(): Promise<SocialItem[]> {
+    try {
+        const response = await fetch('https://theqoo.net/hot', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'ko-KR,ko;q=0.9',
+            },
+        });
+
+        if (!response.ok) {
+            console.log('TheQoo fetch failed:', response.status);
+            return [];
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        const items: SocialItem[] = [];
+
+        // 더쿠 HOT 게시글 파싱
+        $('.bd_lst_wrp li, table.bd_lst tbody tr').each((index, element) => {
+            if (items.length >= 10) return false;
+
+            const $el = $(element);
+            const $link = $el.find('a.title, .title a, td.title a, a[href*="theqoo.net"]').first();
+            let title = $link.text().trim() || $el.find('.title').text().trim();
+            let href = $link.attr('href');
+
+            // 제목에서 불필요한 텍스트 제거
+            title = title.replace(/\s*\d+\s*$/, '').replace(/\[.*?\]/g, '').trim();
+
+            if (title && href && !title.includes('공지') && title.length > 5) {
+                // 상대 URL 처리
+                if (!href.startsWith('http')) {
+                    href = href.startsWith('/') ? `https://theqoo.net${href}` : `https://theqoo.net/${href}`;
+                }
+
+                items.push({
+                    rank: items.length + 1,
+                    title: title.slice(0, 60),
+                    link: href,
+                    sourceName: '더쿠',
+                });
+            }
+        });
+
+        return items;
+    } catch (error) {
+        console.error('TheQoo scrape error:', error);
+        return [];
+    }
+}
+
+// 인스티즈 실시간 이슈 크롤링
+async function scrapeInstizIssue(): Promise<SocialItem[]> {
+    try {
+        const response = await fetch('https://www.instiz.net/pt?category=1', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'ko-KR,ko;q=0.9',
+            },
+        });
+
+        if (!response.ok) {
+            console.log('Instiz fetch failed:', response.status);
+            return [];
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        const items: SocialItem[] = [];
+
+        // 인스티즈 이슈 게시글 파싱
+        $('#mainboard tr, .listbox li, .list_wrap li').each((index, element) => {
+            if (items.length >= 10) return false;
+
+            const $el = $(element);
+            const $link = $el.find('a[href*="instiz.net"]').first();
+            let title = $link.text().trim() || $el.find('.title').text().trim();
+            let href = $link.attr('href');
+
+            title = title.replace(/\s*\d+\s*$/, '').replace(/\[.*?\]/g, '').trim();
+
+            if (title && href && title.length > 5) {
+                if (!href.startsWith('http')) {
+                    href = `https://www.instiz.net${href}`;
+                }
+
+                items.push({
+                    rank: items.length + 1,
+                    title: title.slice(0, 60),
+                    link: href,
+                    sourceName: '인스티즈',
+                });
+            }
+        });
+
+        return items;
+    } catch (error) {
+        console.error('Instiz scrape error:', error);
+        return [];
+    }
+}
+
+// 다양한 소스에서 바이럴/소셜 트렌드 수집 - RSS fallback용
 const SOCIAL_RSS_SOURCES = [
     // 연예/엔터테인먼트 뉴스
     {
@@ -39,7 +147,36 @@ const SOCIAL_RSS_SOURCES = [
 
 export async function fetchSocialTrends(limit: number = 10): Promise<SocialItem[]> {
     try {
-        // 1. 여러 소스에서 뉴스 수집
+        // 1. 커뮤니티 직접 스크래핑 시도 (실제 포스트 링크!)
+        console.log('Trying community direct scrape...');
+        const [theqoo, instiz] = await Promise.allSettled([
+            scrapeTheqooHot(),
+            scrapeInstizIssue(),
+        ]);
+
+        const communityItems: SocialItem[] = [];
+
+        if (theqoo.status === 'fulfilled' && theqoo.value.length > 0) {
+            console.log(`Got ${theqoo.value.length} items from TheQoo`);
+            communityItems.push(...theqoo.value.slice(0, 5));
+        }
+
+        if (instiz.status === 'fulfilled' && instiz.value.length > 0) {
+            console.log(`Got ${instiz.value.length} items from Instiz`);
+            communityItems.push(...instiz.value.slice(0, 5));
+        }
+
+        // 커뮤니티에서 충분히 가져왔으면 반환
+        if (communityItems.length >= 5) {
+            // 랭킹 재정렬
+            return communityItems.slice(0, limit).map((item, index) => ({
+                ...item,
+                rank: index + 1,
+            }));
+        }
+
+        // 2. Fallback: 뉴스 RSS에서 수집
+        console.log('Falling back to news RSS...');
         const allItems = await fetchFromMultipleSources();
 
         if (allItems.length === 0) {
@@ -47,14 +184,14 @@ export async function fetchSocialTrends(limit: number = 10): Promise<SocialItem[
             return getMockSocialTrends();
         }
 
-        // 2. Gemini로 소셜/바이럴 트렌드 추출
+        // 3. Gemini로 소셜/바이럴 트렌드 추출
         const socialTrends = await extractSocialTrendsWithGemini(allItems);
 
         if (socialTrends.length > 0) {
             return socialTrends.slice(0, limit);
         }
 
-        // 3. Gemini 실패시 기본 추출
+        // 4. Gemini 실패시 기본 추출
         return extractBestItems(allItems, limit);
     } catch (error) {
         console.error('Error fetching social trends:', error);
