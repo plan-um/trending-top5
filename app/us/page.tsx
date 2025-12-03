@@ -27,6 +27,7 @@ export default function USPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeSection, setActiveSection] = useState<TrendCategory>('keyword');
+  const [basePath, setBasePath] = useState('');
   const sectionRefs = useRef<Record<TrendCategory, HTMLElement | null>>({
     keyword: null,
     social: null,
@@ -37,8 +38,12 @@ export default function USPage() {
 
   const fetchTrends = useCallback(async (forceRefresh = false) => {
     try {
-      const endpoint = forceRefresh ? '/api/trends/us?refresh=true' : '/api/trends/us';
-      const response = await fetch(endpoint);
+      // Detect basePath from current URL (e.g., /top10 for planum.one/top10)
+      const basePath = typeof window !== 'undefined'
+        ? window.location.pathname.replace(/\/us$/, '').replace(/\/$/, '')
+        : '';
+      const apiPath = `${basePath}/api/trends/us${forceRefresh ? '?refresh=true' : ''}`;
+      const response = await fetch(apiPath);
       if (!response.ok) throw new Error('Failed to fetch trends');
       const data = await response.json();
       setTrends(data.trends);
@@ -51,6 +56,10 @@ export default function USPage() {
   }, []);
 
   useEffect(() => {
+    // Detect basePath from current URL (e.g., /top10 for planum.one/top10)
+    const detectedBasePath = window.location.pathname.replace(/\/us$/, '').replace(/\/$/, '');
+    setBasePath(detectedBasePath);
+
     fetchTrends();
     const interval = setInterval(() => fetchTrends(), 5 * 60 * 1000);
     return () => clearInterval(interval);
@@ -120,7 +129,7 @@ export default function USPage() {
               {/* Country Toggle */}
               <div className="flex items-center border-2 border-black bg-white">
                 <Link
-                  href="/"
+                  href={basePath || '/'}
                   className="px-2 py-1 text-lg font-bold bg-white text-black hover:bg-gray-100 transition-all"
                   title="한국"
                 >
