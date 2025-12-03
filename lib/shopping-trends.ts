@@ -225,16 +225,19 @@ JSON 형식으로만 응답:
     }[];
 
     return products.map((p, index) => {
-      // 원본 아이템에서 링크와 스니펫 가져오기
       const item = items[p.itemIndex] || items[0];
+
+      // 네이버 쇼핑 검색 링크 생성 (실제 상품 페이지로 이동!)
+      const productName = p.product;
+      const naverShoppingLink = `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(productName)}`;
 
       return {
         rank: index + 1,
         title: p.product,
-        link: item.link, // 원본 링크 사용
+        link: naverShoppingLink, // 네이버 쇼핑 검색 링크!
         price: p.price,
-        description: cleanSnippet(item.snippet), // 원본 스니펫 사용
-        sourceName: p.store || item.source,
+        description: cleanSnippet(item.snippet),
+        sourceName: p.store || '네이버쇼핑',
       };
     });
   } catch (error) {
@@ -277,15 +280,15 @@ function extractBestItems(
     if (!seen.has(key) && results.length < limit) {
       seen.add(key);
 
-      // 제목에서 상품명 추출
+      // 제목에서 상품명 추출 → 네이버 쇼핑 검색 링크!
       const productName = extractProductName(item.title);
-      const searchLink = `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(productName)}`;
+      const naverShoppingLink = `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(productName)}`;
 
       results.push({
         rank: results.length + 1,
         title: productName,
-        link: searchLink,
-        sourceName: '쇼핑',
+        link: naverShoppingLink,
+        sourceName: '네이버쇼핑',
       });
     }
   }
