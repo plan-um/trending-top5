@@ -2,20 +2,21 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { UpdateTime } from './components/UpdateTime';
-import {
-  TrendCategory,
-  TrendResponse,
-  TrendItem,
-  CATEGORY_LABELS,
-  CATEGORY_ICONS,
-} from '@/types/trend';
-import { Flame, ExternalLink, Youtube, Search, TrendingUp, ShoppingCart } from 'lucide-react';
+import { TrendCategory, TrendResponse, TrendItem, CATEGORY_ICONS } from '@/types/trend';
+import { Flame, ExternalLink, Youtube, Search, TrendingUp, ShoppingCart, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES: TrendCategory[] = ['keyword', 'social', 'content', 'shopping', 'rising'];
 
-export default function Home() {
+const US_CATEGORY_LABELS: Record<TrendCategory, string> = {
+  keyword: 'News',
+  social: 'Social',
+  content: 'YouTube',
+  shopping: 'Shopping',
+  rising: 'Trending',
+};
+
+export default function USPage() {
   const [trends, setTrends] = useState<Record<TrendCategory, TrendResponse | null>>({
     keyword: null,
     social: null,
@@ -34,14 +35,15 @@ export default function Home() {
     rising: null,
   });
 
-  const fetchTrends = useCallback(async () => {
+  const fetchTrends = useCallback(async (forceRefresh = false) => {
     try {
-      const response = await fetch('/api/trends');
+      const endpoint = forceRefresh ? '/api/trends/us?refresh=true' : '/api/trends/us';
+      const response = await fetch(endpoint);
       if (!response.ok) throw new Error('Failed to fetch trends');
       const data = await response.json();
       setTrends(data.trends);
     } catch (error) {
-      console.error('Error fetching trends:', error);
+      console.error('Error fetching US trends:', error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -50,7 +52,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchTrends();
-    const interval = setInterval(fetchTrends, 5 * 60 * 1000);
+    const interval = setInterval(() => fetchTrends(), 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchTrends]);
 
@@ -74,7 +76,7 @@ export default function Home() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchTrends();
+    fetchTrends(true);
   };
 
   const scrollToSection = (category: TrendCategory) => {
@@ -87,7 +89,6 @@ export default function Home() {
     }
   };
 
-  // 각 카테고리 1위 아이템 가져오기
   const getTopItems = () => {
     return CATEGORIES.map(cat => ({
       category: cat,
@@ -95,9 +96,15 @@ export default function Home() {
     })).filter(x => x.item !== null);
   };
 
+  const formatTime = (dateString: string | null) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="min-h-screen bg-[var(--color-nb-yellow)] font-sans selection:bg-black selection:text-white">
-      {/* 헤더 */}
+      {/* Header */}
       <header className="sticky top-0 z-50 bg-white border-b-thick border-black shadow-hard">
         <div className="max-w-[1800px] mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
@@ -110,31 +117,42 @@ export default function Home() {
               </h1>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* 국가 전환 링크 */}
+              {/* Country Toggle */}
               <div className="flex items-center border-2 border-black bg-white">
-                <span className="px-2 py-1 text-lg font-bold bg-black text-white">
-                  🇰🇷
-                </span>
                 <Link
-                  href="/us"
+                  href="/"
                   className="px-2 py-1 text-lg font-bold bg-white text-black hover:bg-gray-100 transition-all"
-                  title="USA"
+                  title="한국"
                 >
-                  🇺🇸
+                  🇰🇷
                 </Link>
+                <span className="px-2 py-1 text-lg font-bold bg-black text-white">
+                  🇺🇸
+                </span>
               </div>
-              <UpdateTime
-                updatedAt={trends.keyword?.updatedAt || null}
-                onRefresh={handleRefresh}
-                isRefreshing={isRefreshing}
-              />
+              {/* Update Time */}
+              <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
+                <span className="text-gray-500">
+                  {formatTime(trends.keyword?.updatedAt || null)}
+                </span>
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className={cn(
+                    "p-1 border border-black bg-white hover:bg-gray-100 transition-all",
+                    isRefreshing && "animate-spin"
+                  )}
+                >
+                  <RefreshCw className="w-3 h-3" />
+                </button>
+              </div>
               <span className="hidden md:block px-2 py-1 bg-black text-white text-xs font-bold uppercase tracking-wider transform -rotate-1">
                 Live
               </span>
             </div>
           </div>
 
-          {/* 모바일 전용 퀵 네비게이션 */}
+          {/* Mobile Quick Nav */}
           <nav className="lg:hidden flex gap-1 overflow-x-auto pt-3 -mx-4 px-4 scrollbar-hide">
             {CATEGORIES.map((category) => (
               <button
@@ -148,7 +166,7 @@ export default function Home() {
                 )}
               >
                 <span>{CATEGORY_ICONS[category]}</span>
-                <span>{CATEGORY_LABELS[category]}</span>
+                <span>{US_CATEGORY_LABELS[category]}</span>
               </button>
             ))}
           </nav>
@@ -160,21 +178,22 @@ export default function Home() {
           <LoadingSkeleton />
         ) : (
           <>
-            {/* 히어로 섹션: 각 카테고리 1위 */}
+            {/* Hero Section */}
             <HeroSection topItems={getTopItems()} />
 
-            {/* PC: 5컬럼 가로 배치 */}
+            {/* PC: 5 Columns */}
             <div className="hidden lg:grid lg:grid-cols-5 gap-4 mt-8">
               {CATEGORIES.map((category) => (
                 <CategoryColumn
                   key={category}
                   category={category}
                   items={trends[category]?.items || []}
+                  categoryLabel={US_CATEGORY_LABELS[category]}
                 />
               ))}
             </div>
 
-            {/* 모바일: 세로 섹션 */}
+            {/* Mobile: Vertical Sections */}
             <div className="lg:hidden space-y-8 mt-6">
               {CATEGORIES.map((category) => (
                 <MobileSection
@@ -182,6 +201,7 @@ export default function Home() {
                   category={category}
                   items={trends[category]?.items || []}
                   sectionRef={(el) => { sectionRefs.current[category] = el; }}
+                  categoryLabel={US_CATEGORY_LABELS[category]}
                 />
               ))}
             </div>
@@ -189,11 +209,11 @@ export default function Home() {
         )}
       </main>
 
-      {/* 푸터 */}
+      {/* Footer */}
       <footer className="border-t-2 border-black bg-white mt-8">
         <div className="max-w-[1800px] mx-auto px-4 py-6 text-center">
           <p className="font-bold text-sm">
-            매 시간 자동 업데이트 | <span className="bg-[var(--color-nb-purple)] px-1">실시간 트렌드</span>
+            Auto-updated hourly | <span className="bg-[var(--color-nb-purple)] px-1">Real-time Trends</span>
           </p>
           <p className="text-xs text-gray-500 mt-2 font-mono">
             © 2025 TRENDING TOP 10
@@ -204,7 +224,7 @@ export default function Home() {
   );
 }
 
-// 히어로 섹션 컴포넌트
+// Hero Section
 function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: TrendItem | null }[] }) {
   if (topItems.length === 0) return null;
 
@@ -212,7 +232,7 @@ function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: 
     <div className="bg-white border-2 border-black shadow-hard p-4">
       <h2 className="text-lg font-black uppercase mb-4 flex items-center gap-2">
         <span className="bg-black text-white px-2 py-1">HOT NOW</span>
-        <span className="text-sm font-normal text-gray-500">각 카테고리 1위</span>
+        <span className="text-sm font-normal text-gray-500">#1 in each category</span>
       </h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {topItems.map(({ category, item }) => item && (
@@ -223,7 +243,6 @@ function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: 
             rel="noopener noreferrer"
             className="group block bg-gray-50 border-2 border-black p-3 hover:bg-gray-100 transition-colors"
           >
-            {/* 카테고리 라벨 */}
             <div className={cn(
               "text-xs font-bold uppercase mb-2 px-2 py-0.5 inline-block border border-black",
               category === 'keyword' && "bg-[var(--color-nb-blue)]",
@@ -232,10 +251,9 @@ function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: 
               category === 'shopping' && "bg-[var(--color-nb-purple)]",
               category === 'rising' && "bg-[var(--color-nb-red)] text-white"
             )}>
-              {CATEGORY_ICONS[category]} {CATEGORY_LABELS[category]}
+              {CATEGORY_ICONS[category]} {US_CATEGORY_LABELS[category]}
             </div>
 
-            {/* 썸네일 */}
             {(item.thumbnail || item.metadata?.thumbnail) && (
               <div className="mb-2 border border-black overflow-hidden aspect-video">
                 <img
@@ -246,12 +264,10 @@ function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: 
               </div>
             )}
 
-            {/* 제목 */}
             <h3 className="text-sm font-bold line-clamp-2 group-hover:underline">
               {item.title}
             </h3>
 
-            {/* 요약 */}
             {item.summary && (
               <p className="text-xs text-gray-600 mt-1 line-clamp-2">
                 {item.summary}
@@ -264,8 +280,8 @@ function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: 
   );
 }
 
-// PC 컬럼 컴포넌트
-function CategoryColumn({ category, items }: { category: TrendCategory; items: TrendItem[] }) {
+// PC Column
+function CategoryColumn({ category, items, categoryLabel }: { category: TrendCategory; items: TrendItem[]; categoryLabel: string }) {
   const getCategoryColor = (cat: TrendCategory) => {
     switch (cat) {
       case 'keyword': return 'bg-[var(--color-nb-blue)]';
@@ -279,15 +295,13 @@ function CategoryColumn({ category, items }: { category: TrendCategory; items: T
 
   return (
     <div className="flex flex-col">
-      {/* 컬럼 헤더 */}
       <div className={cn("border-2 border-black p-3 mb-3 shadow-hard-sm", getCategoryColor(category))}>
         <div className="flex items-center gap-2">
           <span className="text-xl">{CATEGORY_ICONS[category]}</span>
-          <h2 className="text-sm font-black uppercase">{CATEGORY_LABELS[category]}</h2>
+          <h2 className="text-sm font-black uppercase">{categoryLabel}</h2>
         </div>
       </div>
 
-      {/* 아이템 리스트 */}
       <div className="space-y-2 flex-1">
         {items.length > 0 ? (
           items.map((item, idx) => (
@@ -300,7 +314,7 @@ function CategoryColumn({ category, items }: { category: TrendCategory; items: T
           ))
         ) : (
           <div className="text-center py-8 bg-white border-2 border-black">
-            <p className="text-gray-400 text-sm">데이터 없음</p>
+            <p className="text-gray-400 text-sm">No data</p>
           </div>
         )}
       </div>
@@ -308,15 +322,17 @@ function CategoryColumn({ category, items }: { category: TrendCategory; items: T
   );
 }
 
-// 모바일 섹션 컴포넌트
+// Mobile Section
 function MobileSection({
   category,
   items,
   sectionRef,
+  categoryLabel,
 }: {
   category: TrendCategory;
   items: TrendItem[];
   sectionRef: (el: HTMLElement | null) => void;
+  categoryLabel: string;
 }) {
   const getCategoryColor = (cat: TrendCategory) => {
     switch (cat) {
@@ -335,15 +351,13 @@ function MobileSection({
       id={`section-${category}`}
       className="scroll-mt-32"
     >
-      {/* 섹션 헤더 */}
       <div className={cn("border-2 border-black p-3 mb-3 shadow-hard", getCategoryColor(category))}>
         <div className="flex items-center gap-2">
           <span className="text-2xl">{CATEGORY_ICONS[category]}</span>
-          <h2 className="text-lg font-black uppercase">{CATEGORY_LABELS[category]}</h2>
+          <h2 className="text-lg font-black uppercase">{categoryLabel}</h2>
         </div>
       </div>
 
-      {/* 아이템 리스트 */}
       <div className="space-y-2">
         {items.length > 0 ? (
           items.map((item, idx) => (
@@ -356,7 +370,7 @@ function MobileSection({
           ))
         ) : (
           <div className="text-center py-8 bg-white border-2 border-black shadow-hard">
-            <p className="text-gray-400 font-bold">데이터가 없습니다.</p>
+            <p className="text-gray-400 font-bold">No data available.</p>
           </div>
         )}
       </div>
@@ -364,7 +378,7 @@ function MobileSection({
   );
 }
 
-// 트렌드 아이템 카드 컴포넌트
+// Trend Item Card
 function TrendItemCard({
   item,
   category,
@@ -397,7 +411,6 @@ function TrendItemCard({
       )}
     >
       <div className="flex gap-3">
-        {/* 랭크 배지 */}
         <div className={cn(
           "flex-shrink-0 w-8 h-8 flex items-center justify-center border-2 border-black text-sm font-black",
           item.rank === 1 ? "bg-[var(--color-nb-red)] text-white" :
@@ -409,7 +422,6 @@ function TrendItemCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* 썸네일 (1-3위만) */}
           {showImage && thumbnail && (
             <div className="mb-2 border border-black overflow-hidden aspect-video max-h-24">
               <img
@@ -420,26 +432,22 @@ function TrendItemCard({
             </div>
           )}
 
-          {/* 제목 */}
           <h3 className="text-sm font-bold line-clamp-2 leading-tight mb-1 hover:underline">
             {item.title}
           </h3>
 
-          {/* 가격 (쇼핑) */}
           {isShopping && (item.price || item.metadata?.price) && (
             <p className="text-sm font-bold text-[var(--color-nb-red)] mb-1">
               {item.price || item.metadata?.price}
             </p>
           )}
 
-          {/* 요약/설명 */}
           {item.summary && (
             <p className="text-[11px] text-gray-600 line-clamp-2 leading-relaxed mb-1">
               {item.summary}
             </p>
           )}
 
-          {/* 메타 정보 */}
           <div className="flex flex-wrap items-center gap-1 text-[10px] text-gray-500">
             <span className="flex items-center gap-0.5">
               {getSourceIcon(item.sourceName)}
@@ -458,11 +466,10 @@ function TrendItemCard({
   );
 }
 
-// 로딩 스켈레톤
+// Loading Skeleton
 function LoadingSkeleton() {
   return (
     <div className="space-y-6">
-      {/* 히어로 스켈레톤 */}
       <div className="bg-white border-2 border-black p-4">
         <div className="h-6 bg-gray-200 animate-pulse w-32 mb-4" />
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -476,7 +483,6 @@ function LoadingSkeleton() {
         </div>
       </div>
 
-      {/* 컬럼 스켈레톤 */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {CATEGORIES.map((category) => (
           <div key={category} className="bg-white border-2 border-black p-4">
