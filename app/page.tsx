@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { UpdateTime } from './components/UpdateTime';
+import { LocaleToggle } from './components/LocaleToggle';
+import { useLocale } from './context/LocaleContext';
 import {
   TrendCategory,
   TrendResponse,
   TrendItem,
-  CATEGORY_LABELS,
   CATEGORY_ICONS,
 } from '@/types/trend';
 import { Flame, ExternalLink, Youtube, Search, TrendingUp, ShoppingCart } from 'lucide-react';
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils';
 const CATEGORIES: TrendCategory[] = ['keyword', 'social', 'content', 'shopping', 'rising'];
 
 export default function Home() {
+  const { locale, categoryLabels } = useLocale();
   const [trends, setTrends] = useState<Record<TrendCategory, TrendResponse | null>>({
     keyword: null,
     social: null,
@@ -35,7 +37,9 @@ export default function Home() {
 
   const fetchTrends = useCallback(async () => {
     try {
-      const response = await fetch('/api/trends');
+      // Fetch from different endpoints based on locale
+      const endpoint = locale === 'us' ? '/api/trends/us' : '/api/trends';
+      const response = await fetch(endpoint);
       if (!response.ok) throw new Error('Failed to fetch trends');
       const data = await response.json();
       setTrends(data.trends);
@@ -45,9 +49,10 @@ export default function Home() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
+    setIsLoading(true);
     fetchTrends();
     const interval = setInterval(fetchTrends, 5 * 60 * 1000);
     return () => clearInterval(interval);
@@ -108,7 +113,9 @@ export default function Home() {
                 Trending Top 10
               </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* 국가 전환 토글 */}
+              <LocaleToggle />
               <UpdateTime
                 updatedAt={trends.keyword?.updatedAt || null}
                 onRefresh={handleRefresh}
@@ -134,7 +141,7 @@ export default function Home() {
                 )}
               >
                 <span>{CATEGORY_ICONS[category]}</span>
-                <span>{CATEGORY_LABELS[category]}</span>
+                <span>{categoryLabels[category]}</span>
               </button>
             ))}
           </nav>
@@ -147,7 +154,7 @@ export default function Home() {
         ) : (
           <>
             {/* 히어로 섹션: 각 카테고리 1위 */}
-            <HeroSection topItems={getTopItems()} />
+            <HeroSection topItems={getTopItems()} categoryLabels={categoryLabels} />
 
             {/* PC: 5컬럼 가로 배치 */}
             <div className="hidden lg:grid lg:grid-cols-5 gap-4 mt-8">
@@ -156,6 +163,7 @@ export default function Home() {
                   key={category}
                   category={category}
                   items={trends[category]?.items || []}
+                  categoryLabel={categoryLabels[category]}
                 />
               ))}
             </div>
@@ -168,6 +176,7 @@ export default function Home() {
                   category={category}
                   items={trends[category]?.items || []}
                   sectionRef={(el) => { sectionRefs.current[category] = el; }}
+                  categoryLabel={categoryLabels[category]}
                 />
               ))}
             </div>
@@ -191,14 +200,14 @@ export default function Home() {
 }
 
 // 히어로 섹션 컴포넌트
-function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: TrendItem | null }[] }) {
+function HeroSection({ topItems, categoryLabels }: { topItems: { category: TrendCategory; item: TrendItem | null }[]; categoryLabels: Record<string, string> }) {
   if (topItems.length === 0) return null;
 
   return (
     <div className="bg-white border-2 border-black shadow-hard p-4">
       <h2 className="text-lg font-black uppercase mb-4 flex items-center gap-2">
         <span className="bg-black text-white px-2 py-1">HOT NOW</span>
-        <span className="text-sm font-normal text-gray-500">각 카테고리 1위</span>
+        <span className="text-sm font-normal text-gray-500">#1 in each category</span>
       </h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {topItems.map(({ category, item }) => item && (
@@ -218,7 +227,7 @@ function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: 
               category === 'shopping' && "bg-[var(--color-nb-purple)]",
               category === 'rising' && "bg-[var(--color-nb-red)] text-white"
             )}>
-              {CATEGORY_ICONS[category]} {CATEGORY_LABELS[category]}
+              {CATEGORY_ICONS[category]} {categoryLabels[category]}
             </div>
 
             {/* 썸네일 */}
@@ -251,7 +260,7 @@ function HeroSection({ topItems }: { topItems: { category: TrendCategory; item: 
 }
 
 // PC 컬럼 컴포넌트
-function CategoryColumn({ category, items }: { category: TrendCategory; items: TrendItem[] }) {
+function CategoryColumn({ category, items, categoryLabel }: { category: TrendCategory; items: TrendItem[]; categoryLabel: string }) {
   const getCategoryColor = (cat: TrendCategory) => {
     switch (cat) {
       case 'keyword': return 'bg-[var(--color-nb-blue)]';
@@ -269,7 +278,7 @@ function CategoryColumn({ category, items }: { category: TrendCategory; items: T
       <div className={cn("border-2 border-black p-3 mb-3 shadow-hard-sm", getCategoryColor(category))}>
         <div className="flex items-center gap-2">
           <span className="text-xl">{CATEGORY_ICONS[category]}</span>
-          <h2 className="text-sm font-black uppercase">{CATEGORY_LABELS[category]}</h2>
+          <h2 className="text-sm font-black uppercase">{categoryLabel}</h2>
         </div>
       </div>
 
@@ -299,10 +308,12 @@ function MobileSection({
   category,
   items,
   sectionRef,
+  categoryLabel,
 }: {
   category: TrendCategory;
   items: TrendItem[];
   sectionRef: (el: HTMLElement | null) => void;
+  categoryLabel: string;
 }) {
   const getCategoryColor = (cat: TrendCategory) => {
     switch (cat) {
@@ -325,7 +336,7 @@ function MobileSection({
       <div className={cn("border-2 border-black p-3 mb-3 shadow-hard", getCategoryColor(category))}>
         <div className="flex items-center gap-2">
           <span className="text-2xl">{CATEGORY_ICONS[category]}</span>
-          <h2 className="text-lg font-black uppercase">{CATEGORY_LABELS[category]}</h2>
+          <h2 className="text-lg font-black uppercase">{categoryLabel}</h2>
         </div>
       </div>
 

@@ -15,9 +15,9 @@ const parser = new Parser();
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// 쇼핑몰별 검색 링크 생성 함수들
+// 쇼핑몰별 검색 링크 생성 함수들 (네이버 쇼핑 제외 - 봇 차단됨)
 const SHOPPING_LINKS = {
-  // 쿠팡 - 가장 안정적
+  // 쿠팡 - 가장 안정적 (기본값)
   coupang: (keyword: string) =>
     `https://www.coupang.com/np/search?component=&q=${encodeURIComponent(keyword)}&channel=user`,
 
@@ -48,10 +48,6 @@ const SHOPPING_LINKS = {
   // 다나와 (전자기기 가격비교)
   danawa: (keyword: string) =>
     `https://search.danawa.com/dsearch.php?query=${encodeURIComponent(keyword)}`,
-
-  // 네이버 쇼핑 (검색 결과 - 직접 상품 페이지 대신)
-  naver: (keyword: string) =>
-    `https://search.shopping.naver.com/search/all?query=${encodeURIComponent(keyword)}`,
 };
 
 // 상품 카테고리별 최적 쇼핑몰 매핑
@@ -357,7 +353,7 @@ function getMockShoppingTrends(): ShoppingItem[] {
     {
       rank: 1,
       title: '쇼핑 트렌드 로딩 중',
-      link: 'https://shopping.naver.com',
+      link: 'https://www.coupang.com',
       description: '잠시 후 다시 시도해주세요',
       sourceName: 'System',
     },

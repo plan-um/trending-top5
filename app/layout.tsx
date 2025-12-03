@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { LocaleProvider } from "./context/LocaleContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,13 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "트렌딩 탑10 - 지금 뜨는 것 10개만",
-  description: "실시간 트렌드를 30초 안에 파악하세요. 화제의 키워드, 뉴스, 인기 콘텐츠를 한눈에.",
-  keywords: ["트렌드", "실시간", "검색어", "뉴스", "유튜브", "인기"],
+  title: "Trending Top 10 - 트렌딩 탑10",
+  description: "실시간 트렌드를 30초 안에 파악하세요. Real-time trends at a glance.",
+  keywords: ["트렌드", "실시간", "trending", "viral", "news", "social"],
   authors: [{ name: "Planum" }],
   openGraph: {
-    title: "트렌딩 탑10",
-    description: "지금 뜨는 것 10개만, 30초 안에 파악하기",
+    title: "Trending Top 10",
+    description: "지금 뜨는 것 10개만 / Top 10 trending now",
     type: "website",
   },
 };
@@ -40,7 +41,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        {children}
+        <LocaleProvider>
+          {children}
+        </LocaleProvider>
       </body>
     </html>
   );
