@@ -1,6 +1,5 @@
 import Parser from 'rss-parser';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as cheerio from 'cheerio';
 
 const parser = new Parser({
     customFields: {
@@ -20,163 +19,51 @@ export interface SocialItem {
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// 더쿠 실시간 HOT 크롤링 - 실제 커뮤니티 포스트 링크!
-async function scrapeTheqooHot(): Promise<SocialItem[]> {
-    try {
-        const response = await fetch('https://theqoo.net/hot', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'ko-KR,ko;q=0.9',
-            },
-        });
-
-        if (!response.ok) {
-            console.log('TheQoo fetch failed:', response.status);
-            return [];
-        }
-
-        const html = await response.text();
-        const $ = cheerio.load(html);
-        const items: SocialItem[] = [];
-
-        // 더쿠 HOT 게시글 파싱
-        $('.bd_lst_wrp li, table.bd_lst tbody tr').each((index, element) => {
-            if (items.length >= 10) return false;
-
-            const $el = $(element);
-            const $link = $el.find('a.title, .title a, td.title a, a[href*="theqoo.net"]').first();
-            let title = $link.text().trim() || $el.find('.title').text().trim();
-            let href = $link.attr('href');
-
-            // 제목에서 불필요한 텍스트 제거
-            title = title.replace(/\s*\d+\s*$/, '').replace(/\[.*?\]/g, '').trim();
-
-            if (title && href && !title.includes('공지') && title.length > 5) {
-                // 상대 URL 처리
-                if (!href.startsWith('http')) {
-                    href = href.startsWith('/') ? `https://theqoo.net${href}` : `https://theqoo.net/${href}`;
-                }
-
-                items.push({
-                    rank: items.length + 1,
-                    title: title.slice(0, 60),
-                    link: href,
-                    sourceName: '더쿠',
-                });
-            }
-        });
-
-        return items;
-    } catch (error) {
-        console.error('TheQoo scrape error:', error);
-        return [];
-    }
-}
-
-// 인스티즈 실시간 이슈 크롤링
-async function scrapeInstizIssue(): Promise<SocialItem[]> {
-    try {
-        const response = await fetch('https://www.instiz.net/pt?category=1', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'ko-KR,ko;q=0.9',
-            },
-        });
-
-        if (!response.ok) {
-            console.log('Instiz fetch failed:', response.status);
-            return [];
-        }
-
-        const html = await response.text();
-        const $ = cheerio.load(html);
-        const items: SocialItem[] = [];
-
-        // 인스티즈 이슈 게시글 파싱
-        $('#mainboard tr, .listbox li, .list_wrap li').each((index, element) => {
-            if (items.length >= 10) return false;
-
-            const $el = $(element);
-            const $link = $el.find('a[href*="instiz.net"]').first();
-            let title = $link.text().trim() || $el.find('.title').text().trim();
-            let href = $link.attr('href');
-
-            title = title.replace(/\s*\d+\s*$/, '').replace(/\[.*?\]/g, '').trim();
-
-            if (title && href && title.length > 5) {
-                if (!href.startsWith('http')) {
-                    href = `https://www.instiz.net${href}`;
-                }
-
-                items.push({
-                    rank: items.length + 1,
-                    title: title.slice(0, 60),
-                    link: href,
-                    sourceName: '인스티즈',
-                });
-            }
-        });
-
-        return items;
-    } catch (error) {
-        console.error('Instiz scrape error:', error);
-        return [];
-    }
-}
-
-// 다양한 소스에서 바이럴/소셜 트렌드 수집 - RSS fallback용
+// SNS 플랫폼별 트렌드 RSS 소스 (Twitter, Threads, Instagram, Facebook)
 const SOCIAL_RSS_SOURCES = [
-    // 연예/엔터테인먼트 뉴스
+    // 트위터/X 관련 화제
     {
-        url: 'https://news.google.com/rss/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNRE55YXpBU0JXVnVMVWRDS0FBUAE?hl=ko&gl=KR&ceid=KR:ko',
-        name: 'Entertainment',
+        url: 'https://news.google.com/rss/search?q=%ED%8A%B8%EC%9C%84%ED%84%B0+%ED%99%94%EC%A0%9C+OR+%ED%8A%B8%EC%9C%97+%EC%8B%A4%EA%B2%80+OR+X+%ED%8A%B8%EB%A0%8C%EB%93%9C&hl=ko&gl=KR&ceid=KR:ko',
+        name: '트위터/X',
+        platform: 'twitter',
     },
-    // 바이럴 키워드 검색 (화제, 논란)
+    // 인스타그램 트렌드
     {
-        url: 'https://news.google.com/rss/search?q=%ED%99%94%EC%A0%9C+OR+%EB%85%BC%EB%9E%80+OR+%ED%95%AB%EC%9D%B4%EC%8A%88&hl=ko&gl=KR&ceid=KR:ko',
-        name: 'Viral',
+        url: 'https://news.google.com/rss/search?q=%EC%9D%B8%EC%8A%A4%ED%83%80%EA%B7%B8%EB%9E%A8+%ED%99%94%EC%A0%9C+OR+%EC%9D%B8%EC%8A%A4%ED%83%80+%EC%9D%B8%EA%B8%B0+OR+%EB%A6%B4%EC%8A%A4&hl=ko&gl=KR&ceid=KR:ko',
+        name: '인스타그램',
+        platform: 'instagram',
     },
-    // SNS 관련 뉴스
+    // 스레드 트렌드
     {
-        url: 'https://news.google.com/rss/search?q=%EC%9D%B8%EC%8A%A4%ED%83%80%EA%B7%B8%EB%9E%A8+OR+%ED%8A%B8%EC%9C%84%ED%84%B0+OR+%EC%9C%A0%ED%8A%9C%EB%B8%8C+OR+%ED%8B%B1%ED%86%A1&hl=ko&gl=KR&ceid=KR:ko',
+        url: 'https://news.google.com/rss/search?q=%EC%8A%A4%EB%A0%88%EB%93%9C+%ED%99%94%EC%A0%9C+OR+Threads+%EC%9D%B8%EA%B8%B0+OR+%EB%A9%94%ED%83%80+%EC%8A%A4%EB%A0%88%EB%93%9C&hl=ko&gl=KR&ceid=KR:ko',
+        name: '스레드',
+        platform: 'threads',
+    },
+    // 페이스북 트렌드
+    {
+        url: 'https://news.google.com/rss/search?q=%ED%8E%98%EC%9D%B4%EC%8A%A4%EB%B6%81+%ED%99%94%EC%A0%9C+OR+%ED%8E%98%EB%B6%81+%EC%9D%B8%EA%B8%B0+OR+%ED%8E%98%EC%9D%B4%EC%8A%A4%EB%B6%81+%EB%B0%94%EC%9D%B4%EB%9F%B4&hl=ko&gl=KR&ceid=KR:ko',
+        name: '페이스북',
+        platform: 'facebook',
+    },
+    // SNS 전반 바이럴
+    {
+        url: 'https://news.google.com/rss/search?q=SNS+%ED%99%94%EC%A0%9C+OR+%EB%B0%94%EC%9D%B4%EB%9F%B4+OR+%EB%B0%88+%ED%99%94%EC%A0%9C&hl=ko&gl=KR&ceid=KR:ko',
         name: 'SNS',
+        platform: 'sns',
+    },
+    // 인플루언서/셀럽 SNS
+    {
+        url: 'https://news.google.com/rss/search?q=%EC%9D%B8%ED%94%8C%EB%A3%A8%EC%96%B8%EC%84%9C+SNS+OR+%EC%85%80%EB%9F%BD+%EC%9D%B8%EC%8A%A4%ED%83%80+OR+%EC%97%B0%EC%98%88%EC%9D%B8+SNS&hl=ko&gl=KR&ceid=KR:ko',
+        name: '셀럽SNS',
+        platform: 'celeb',
     },
 ];
 
 export async function fetchSocialTrends(limit: number = 10): Promise<SocialItem[]> {
     try {
-        // 1. 커뮤니티 직접 스크래핑 시도 (실제 포스트 링크!)
-        console.log('Trying community direct scrape...');
-        const [theqoo, instiz] = await Promise.allSettled([
-            scrapeTheqooHot(),
-            scrapeInstizIssue(),
-        ]);
+        console.log('Fetching social media trends (Twitter, Instagram, Threads, Facebook)...');
 
-        const communityItems: SocialItem[] = [];
-
-        if (theqoo.status === 'fulfilled' && theqoo.value.length > 0) {
-            console.log(`Got ${theqoo.value.length} items from TheQoo`);
-            communityItems.push(...theqoo.value.slice(0, 5));
-        }
-
-        if (instiz.status === 'fulfilled' && instiz.value.length > 0) {
-            console.log(`Got ${instiz.value.length} items from Instiz`);
-            communityItems.push(...instiz.value.slice(0, 5));
-        }
-
-        // 커뮤니티에서 충분히 가져왔으면 반환
-        if (communityItems.length >= 5) {
-            // 랭킹 재정렬
-            return communityItems.slice(0, limit).map((item, index) => ({
-                ...item,
-                rank: index + 1,
-            }));
-        }
-
-        // 2. Fallback: 뉴스 RSS에서 수집
-        console.log('Falling back to news RSS...');
+        // SNS 플랫폼별 뉴스 수집
         const allItems = await fetchFromMultipleSources();
 
         if (allItems.length === 0) {
@@ -184,14 +71,14 @@ export async function fetchSocialTrends(limit: number = 10): Promise<SocialItem[
             return getMockSocialTrends();
         }
 
-        // 3. Gemini로 소셜/바이럴 트렌드 추출
+        // Gemini로 SNS 트렌드 추출 및 분석
         const socialTrends = await extractSocialTrendsWithGemini(allItems);
 
         if (socialTrends.length > 0) {
             return socialTrends.slice(0, limit);
         }
 
-        // 4. Gemini 실패시 기본 추출
+        // Gemini 실패시 기본 추출
         return extractBestItems(allItems, limit);
     } catch (error) {
         console.error('Error fetching social trends:', error);
@@ -200,18 +87,19 @@ export async function fetchSocialTrends(limit: number = 10): Promise<SocialItem[
 }
 
 // 여러 소스에서 뉴스 수집
-async function fetchFromMultipleSources(): Promise<{ title: string; link: string; source: string; snippet: string }[]> {
-    const items: { title: string; link: string; source: string; snippet: string }[] = [];
+async function fetchFromMultipleSources(): Promise<{ title: string; link: string; source: string; platform: string; snippet: string }[]> {
+    const items: { title: string; link: string; source: string; platform: string; snippet: string }[] = [];
 
     for (const source of SOCIAL_RSS_SOURCES) {
         try {
             const feed = await parser.parseURL(source.url);
-            for (const item of feed.items.slice(0, 15)) {
+            for (const item of feed.items.slice(0, 10)) {
                 if (item.title) {
                     items.push({
                         title: cleanTitle(item.title),
                         link: item.link || '',
                         source: source.name,
+                        platform: source.platform,
                         snippet: item.contentSnippet || item.content || '',
                     });
                 }
@@ -224,9 +112,9 @@ async function fetchFromMultipleSources(): Promise<{ title: string; link: string
     return items;
 }
 
-// Gemini로 소셜/바이럴 트렌드 추출 - 원본 링크와 스니펫 사용
+// Gemini로 SNS 트렌드 추출 - 플랫폼 다양성 확보
 async function extractSocialTrendsWithGemini(
-    items: { title: string; link: string; source: string; snippet: string }[]
+    items: { title: string; link: string; source: string; platform: string; snippet: string }[]
 ): Promise<SocialItem[]> {
     if (!genAI) {
         return [];
@@ -238,13 +126,15 @@ async function extractSocialTrendsWithGemini(
         const itemsText = items.map((item, i) => `${i}. [${item.source}] ${item.title}`).join('\n');
 
         const prompt = `
-다음은 한국의 연예/바이럴/SNS 관련 뉴스입니다.
-현재 SNS에서 가장 화제가 되고 있을 것 같은 토픽 10개를 선정해주세요.
+다음은 한국의 SNS(트위터/X, 인스타그램, 스레드, 페이스북) 관련 뉴스입니다.
+현재 각 SNS 플랫폼에서 화제가 되고 있는 토픽 10개를 선정해주세요.
+
+⚠️ 중요: 다양한 플랫폼에서 고르게 선정 (트위터 3개, 인스타 3개, 스레드 2개, 페이스북 2개 정도)
 각 토픽에 대해 관련된 뉴스의 인덱스 번호를 정확히 매칭해주세요.
 
 선정 기준:
-1. SNS에서 공유될 만한 흥미로운 주제
-2. 연예인, 인플루언서 관련
+1. 실제 SNS에서 화제인 내용
+2. 연예인, 인플루언서, 바이럴 콘텐츠
 3. 일반 정치/경제 뉴스 제외
 
 뉴스 목록:
@@ -252,7 +142,7 @@ ${itemsText}
 
 JSON 형식으로만 응답:
 [
-  {"topic": "화제 토픽", "itemIndex": 0, "platform": "Twitter/Instagram/커뮤니티"},
+  {"topic": "화제 토픽", "itemIndex": 0, "platform": "트위터/인스타그램/스레드/페이스북"},
   ...
 ]
 `;
@@ -273,14 +163,13 @@ JSON 형식으로만 응답:
         }[];
 
         return topics.map((t, index) => {
-            // 원본 아이템에서 링크와 스니펫 가져오기
             const item = items[t.itemIndex] || items[0];
 
             return {
                 rank: index + 1,
                 title: t.topic,
-                link: item.link, // 원본 링크 사용
-                description: cleanSnippet(item.snippet), // 원본 스니펫 사용
+                link: item.link,
+                description: cleanSnippet(item.snippet),
                 sourceName: t.platform || item.source,
             };
         });
@@ -303,37 +192,38 @@ function cleanSnippet(snippet: string): string {
 
 // 기본 추출 (Gemini 없을 때)
 function extractBestItems(
-    items: { title: string; link: string; source: string }[],
+    items: { title: string; link: string; source: string; platform: string }[],
     limit: number
 ): SocialItem[] {
-    // 바이럴 키워드 포함 우선
-    const viralKeywords = ['화제', '논란', '충격', '대박', '실검', '급상승', '인기', '핫'];
-
-    const scored = items.map(item => {
-        let score = 0;
-        for (const keyword of viralKeywords) {
-            if (item.title.includes(keyword)) score += 2;
+    // 플랫폼별로 균등하게 선택
+    const platformGroups: Record<string, typeof items> = {};
+    for (const item of items) {
+        if (!platformGroups[item.platform]) {
+            platformGroups[item.platform] = [];
         }
-        if (item.source === 'Viral') score += 1;
-        if (item.source === 'SNS') score += 1;
-        return { ...item, score };
-    });
+        platformGroups[item.platform].push(item);
+    }
 
-    const sorted = scored.sort((a, b) => b.score - a.score);
-    const seen = new Set<string>();
     const results: SocialItem[] = [];
+    const platforms = Object.keys(platformGroups);
+    let platformIndex = 0;
 
-    for (const item of sorted) {
-        const key = item.title.slice(0, 20).toLowerCase();
-        if (!seen.has(key) && results.length < limit) {
-            seen.add(key);
+    while (results.length < limit && platforms.length > 0) {
+        const platform = platforms[platformIndex % platforms.length];
+        const group = platformGroups[platform];
+
+        if (group.length > 0) {
+            const item = group.shift()!;
             results.push({
                 rank: results.length + 1,
                 title: item.title.slice(0, 50),
                 link: item.link,
                 sourceName: item.source,
             });
+        } else {
+            platforms.splice(platformIndex % platforms.length, 1);
         }
+        platformIndex++;
     }
 
     return results;
@@ -356,7 +246,7 @@ function getMockSocialTrends(): SocialItem[] {
     return [
         {
             rank: 1,
-            title: '소셜 트렌드 로딩 중',
+            title: 'SNS 트렌드 로딩 중',
             link: 'https://twitter.com/explore',
             description: '잠시 후 다시 시도해주세요',
             sourceName: 'System',

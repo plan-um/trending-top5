@@ -14,9 +14,9 @@ export interface RisingTrend {
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// 커뮤니티 RSS/API 소스
+// 커뮤니티 RSS/API 소스 - 다양한 출처!
 const COMMUNITY_SOURCES = [
-    // 더쿠 실시간 베스트 (Google 검색 우회)
+    // 더쿠 실시간 베스트
     {
         name: 'theqoo',
         displayName: '더쿠',
@@ -40,11 +40,47 @@ const COMMUNITY_SOURCES = [
         displayName: '인스티즈',
         url: 'https://news.google.com/rss/search?q=site:instiz.net&hl=ko&gl=KR&ceid=KR:ko',
     },
-    // 실시간 이슈/논란 키워드 검색
+    // 디시인사이드
     {
-        name: 'viral_community',
-        displayName: '커뮤니티 이슈',
-        url: 'https://news.google.com/rss/search?q=%EC%BB%A4%EB%AE%A4%EB%8B%88%ED%8B%B0+%ED%99%94%EC%A0%9C+OR+%EB%B0%98%EC%9D%91+OR+%EB%85%BC%EB%9E%80&hl=ko&gl=KR&ceid=KR:ko',
+        name: 'dcinside',
+        displayName: '디시인사이드',
+        url: 'https://news.google.com/rss/search?q=site:dcinside.com+%ED%99%94%EC%A0%9C&hl=ko&gl=KR&ceid=KR:ko',
+    },
+    // 네이트판
+    {
+        name: 'natepann',
+        displayName: '네이트판',
+        url: 'https://news.google.com/rss/search?q=site:pann.nate.com&hl=ko&gl=KR&ceid=KR:ko',
+    },
+    // 클리앙
+    {
+        name: 'clien',
+        displayName: '클리앙',
+        url: 'https://news.google.com/rss/search?q=site:clien.net&hl=ko&gl=KR&ceid=KR:ko',
+    },
+    // 뽐뿌
+    {
+        name: 'ppomppu',
+        displayName: '뽐뿌',
+        url: 'https://news.google.com/rss/search?q=site:ppomppu.co.kr&hl=ko&gl=KR&ceid=KR:ko',
+    },
+    // MLB파크
+    {
+        name: 'mlbpark',
+        displayName: 'MLBPARK',
+        url: 'https://news.google.com/rss/search?q=site:mlbpark.donga.com&hl=ko&gl=KR&ceid=KR:ko',
+    },
+    // 유머/짤 관련
+    {
+        name: 'humor',
+        displayName: '유머게시판',
+        url: 'https://news.google.com/rss/search?q=%EC%BB%A4%EB%AE%A4%EB%8B%88%ED%8B%B0+%EC%9C%A0%EB%A8%B8+OR+%EC%A7%A4+OR+%EB%B0%88&hl=ko&gl=KR&ceid=KR:ko',
+    },
+    // 실시간 이슈/논란
+    {
+        name: 'viral',
+        displayName: '실시간이슈',
+        url: 'https://news.google.com/rss/search?q=%EC%BB%A4%EB%AE%A4%EB%8B%88%ED%8B%B0+%ED%99%94%EC%A0%9C+OR+%EB%85%BC%EB%9E%80+OR+%EB%8C%80%EB%B0%95&hl=ko&gl=KR&ceid=KR:ko',
     },
 ];
 
