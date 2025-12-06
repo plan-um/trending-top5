@@ -10,6 +10,32 @@ import { generateSummary } from '@/lib/gemini';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// Helper: DELETE existing category data and INSERT new data
+async function replaceCategory(category: string, trends: Record<string, unknown>[]) {
+    // Delete existing data for this category
+    const { error: deleteError } = await supabaseAdmin
+        .from('trends')
+        .delete()
+        .eq('category', category);
+
+    if (deleteError) {
+        console.error(`Error deleting ${category}:`, deleteError);
+        throw deleteError;
+    }
+
+    // Insert new data
+    const { error: insertError } = await supabaseAdmin
+        .from('trends')
+        .insert(trends);
+
+    if (insertError) {
+        console.error(`Error inserting ${category}:`, insertError);
+        throw insertError;
+    }
+
+    return trends.length;
+}
+
 export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
     if (
@@ -40,9 +66,7 @@ export async function GET(request: NextRequest) {
                 },
             }))
         );
-        // UPSERT: 테이블 유지하면서 데이터만 업데이트
-        await supabaseAdmin.from('trends').upsert(keywordTrends, { onConflict: 'category,rank' });
-        results.keyword = keywordTrends.length;
+        results.keyword = await replaceCategory('keyword', keywordTrends);
 
         // 2. Social trends
         console.log('Fetching social trends...');
@@ -59,8 +83,7 @@ export async function GET(request: NextRequest) {
                 metadata: { description: item.description },
             }))
         );
-        await supabaseAdmin.from('trends').upsert(socialTrends, { onConflict: 'category,rank' });
-        results.social = socialTrends.length;
+        results.social = await replaceCategory('social', socialTrends);
 
         // 3. Content trends (YouTube)
         console.log('Fetching content trends...');
@@ -82,8 +105,7 @@ export async function GET(request: NextRequest) {
                 },
             }))
         );
-        await supabaseAdmin.from('trends').upsert(contentTrends, { onConflict: 'category,rank' });
-        results.content = contentTrends.length;
+        results.content = await replaceCategory('content', contentTrends);
 
         // 4. Shopping trends
         console.log('Fetching shopping trends...');
@@ -98,8 +120,7 @@ export async function GET(request: NextRequest) {
             change_rate: null,
             metadata: { price: item.price, thumbnail: item.thumbnail },
         }));
-        await supabaseAdmin.from('trends').upsert(shoppingTrends, { onConflict: 'category,rank' });
-        results.shopping = shoppingTrends.length;
+        results.shopping = await replaceCategory('shopping', shoppingTrends);
 
         // 5. Rising trends
         console.log('Fetching rising trends...');
@@ -118,8 +139,7 @@ export async function GET(request: NextRequest) {
                 isNewToNews: trend.isNewToNews,
             },
         }));
-        await supabaseAdmin.from('trends').upsert(risingTrends, { onConflict: 'category,rank' });
-        results.rising = risingTrends.length;
+        results.rising = await replaceCategory('rising', risingTrends);
 
         return NextResponse.json({
             success: true,
